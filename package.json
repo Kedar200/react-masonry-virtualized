@@ -1,0 +1,57 @@
+{
+  "name": "react-masonry-virtualized",
+  "version": "1.0.0",
+  "description": "A high-performance, virtualized masonry grid component for React with dynamic column layout and lazy loading",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.tsx --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.tsx --format cjs,esm --dts --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "react",
+    "masonry",
+    "grid",
+    "virtualized",
+    "lazy-loading",
+    "performance",
+    "pinterest",
+    "layout",
+    "responsive",
+    "typescript"
+  ],
+  "author": "kedar200",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kedar200/react-masonry-virtualized.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kedar200/react-masonry-virtualized/issues"
+  },
+  "homepage": "https://github.com/kedar200/react-masonry-virtualized#readme"
+}
