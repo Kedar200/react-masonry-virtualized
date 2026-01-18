@@ -27,6 +27,16 @@ export interface MasonryGridProps<T> {
   style?: CSSProperties;
   /** Buffer multiplier for viewport (default: 1 = 1 viewport above/below) */
   bufferMultiplier?: number;
+  /** Override column count (auto-calculated if not provided) */
+  columnCount?: number;
+  /** Callback when user scrolls near the end (for infinite scroll) */
+  onEndReached?: () => void;
+  /** Distance from end to trigger onEndReached (default: 500px) */
+  onEndReachedThreshold?: number;
+  /** Show loading skeleton during SSR/hydration */
+  ssrPlaceholder?: ReactNode;
+  /** Disable virtualization (render all items) */
+  disableVirtualization?: boolean;
 }
 
 interface Position {
@@ -51,7 +61,7 @@ const MasonryItem = memo(
       style={{
         width: pos.width,
         height: pos.height,
-        transform: `translate(${pos.x}px, ${pos.y}px) scale(${pos.scale})`,
+        transform: `translate3d(${pos.x}px, ${pos.y}px, 0) scale(${pos.scale})`,
         transformOrigin: "top left",
         willChange: "transform",
         contain: "layout style paint",
@@ -74,10 +84,16 @@ export function MasonryGrid<T>({
   className = "",
   style,
   bufferMultiplier = 1,
+  columnCount,
+  onEndReached,
+  onEndReachedThreshold = 500,
+  ssrPlaceholder,
+  disableVirtualization = false,
 }: MasonryGridProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number>();
-  const resizeTimeoutRef = useRef<NodeJS.Timeout>();
+  const rafRef = useRef<number | undefined>(undefined);
+  const resizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const endReachedCalledRef = useRef(false);
 
   const [positions, setPositions] = useState<Position[]>([]);
   const [containerHeight, setContainerHeight] = useState(0);
@@ -86,14 +102,24 @@ export function MasonryGrid<T>({
   >([]);
   const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set());
   const [scrollTop, setScrollTop] = useState(0);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Handle SSR hydration
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   // Load item dimensions
   useEffect(() => {
     const loadDimensions = async () => {
+      setIsLoading(true);
       const dims = await Promise.all(
         items.map((item, index) => getItemSize(item, index))
       );
       setItemDimensions(dims);
+      setIsLoading(false);
+      endReachedCalledRef.current = false; // Reset for new items
     };
     loadDimensions();
   }, [items, getItemSize]);
@@ -103,7 +129,7 @@ export function MasonryGrid<T>({
     if (!containerRef.current || itemDimensions.length === 0) return;
 
     const containerWidth = containerRef.current.offsetWidth;
-    const numCols = Math.max(2, Math.floor(containerWidth / (minWidth + gap)));
+    const numCols = columnCount ?? Math.max(2, Math.floor(containerWidth / (minWidth + gap)));
     const totalGapWidth = gap * (numCols - 1);
     const cardWidth = (containerWidth - totalGapWidth) / numCols;
     const scale = cardWidth / baseWidth;
@@ -134,7 +160,7 @@ export function MasonryGrid<T>({
 
     setPositions(newPositions);
     setContainerHeight(Math.max(...columnHeights));
-  }, [itemDimensions, items, baseWidth, minWidth, gap]);
+  }, [itemDimensions, items, baseWidth, minWidth, gap, columnCount]);
 
   // Layout effect with debounced resize
   useEffect(() => {
@@ -160,6 +186,12 @@ export function MasonryGrid<T>({
   const calculateVisibleItems = useCallback(() => {
     if (positions.length === 0) return;
 
+    // If virtualization is disabled, show all items
+    if (disableVirtualization) {
+      setVisibleIndices(new Set(positions.map((_, i) => i)));
+      return;
+    }
+
     const viewportHeight = window.innerHeight;
     const buffer = viewportHeight * bufferMultiplier;
     const visible = new Set<number>();
@@ -178,7 +210,16 @@ export function MasonryGrid<T>({
     });
 
     setVisibleIndices(visible);
-  }, [positions, scrollTop, bufferMultiplier]);
+
+    // Check if near end for infinite scroll
+    if (onEndReached && !endReachedCalledRef.current) {
+      const scrollBottom = scrollTop + viewportHeight;
+      if (scrollBottom >= containerHeight - onEndReachedThreshold) {
+        endReachedCalledRef.current = true;
+        onEndReached();
+      }
+    }
+  }, [positions, scrollTop, bufferMultiplier, disableVirtualization, onEndReached, containerHeight, onEndReachedThreshold]);
 
   // Update visible items when scroll or positions change
   useEffect(() => {
@@ -205,6 +246,16 @@ export function MasonryGrid<T>({
       }
     };
   }, []);
+
+  // Show SSR placeholder before hydration
+  if (!isHydrated && ssrPlaceholder) {
+    return <>{ssrPlaceholder}</>;
+  }
+
+  // Show loading state while dimensions are being fetched
+  if (isLoading && ssrPlaceholder) {
+    return <>{ssrPlaceholder}</>;
+  }
 
   return (
     <div

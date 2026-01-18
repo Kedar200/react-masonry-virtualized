@@ -11,6 +11,8 @@ A high-performance, virtualized masonry grid component for React with dynamic co
 - ⚡ **Optimized**: Uses RAF, memoization, and CSS containment
 - 🎯 **Zero Dependencies**: Only peer dependencies on React
 - 📦 **Lightweight**: < 6KB minified
+- ♾️ **Infinite Scroll**: Built-in `onEndReached` callback
+- 🖥️ **SSR Ready**: Placeholder support for hydration
 
 ## Installation
 
@@ -59,43 +61,77 @@ function App() {
 }
 ```
 
-### Example with Custom Items
+### Infinite Scroll Example
 
 ```tsx
-import { MasonryGrid } from 'react-masonry-virtualized';
-
-interface Post {
-  id: string;
-  title: string;
-  image: string;
-  height: number;
-}
-
-const posts: Post[] = [
-  { id: '1', title: 'Post 1', image: 'url', height: 400 },
-  // ... more posts
-];
+import { MasonryGrid, getImageSize } from 'react-masonry-virtualized';
 
 function App() {
+  const [images, setImages] = useState(initialImages);
+  const [loading, setLoading] = useState(false);
+
+  const loadMore = async () => {
+    if (loading) return;
+    setLoading(true);
+    const newImages = await fetchMoreImages();
+    setImages(prev => [...prev, ...newImages]);
+    setLoading(false);
+  };
+
   return (
     <MasonryGrid
-      items={posts}
-      renderItem={(post) => (
-        <div className="card">
-          <img src={post.image} alt={post.title} />
-          <h3>{post.title}</h3>
-        </div>
+      items={images}
+      renderItem={(src, index) => (
+        <img src={src} alt={`Image ${index}`} loading="lazy" />
       )}
-      getItemSize={async (post) => ({
-        width: 400,
-        height: post.height
-      })}
-      baseWidth={241}
-      minWidth={280}
-      gap={16}
+      getItemSize={async (src) => await getImageSize(src)}
+      onEndReached={loadMore}
+      onEndReachedThreshold={500}
     />
   );
 }
+```
+
+### Pre-computed Dimensions (Faster)
+
+If you already know item dimensions, return them immediately for better performance:
+
+```tsx
+<MasonryGrid
+  items={posts}
+  renderItem={(post) => <PostCard post={post} />}
+  getItemSize={(post) => Promise.resolve({ 
+    width: post.width, 
+    height: post.height 
+  })}
+/>
+```
+
+### SSR with Loading Placeholder
+
+```tsx
+<MasonryGrid
+  items={images}
+  renderItem={(src) => <img src={src} />}
+  getItemSize={async (src) => await getImageSize(src)}
+  ssrPlaceholder={
+    <div className="grid grid-cols-3 gap-4">
+      {[...Array(9)].map((_, i) => (
+        <div key={i} className="h-64 bg-gray-200 animate-pulse rounded" />
+      ))}
+    </div>
+  }
+/>
+```
+
+### Fixed Column Count
+
+```tsx
+<MasonryGrid
+  items={images}
+  columnCount={4}  // Always 4 columns
+  // ... other props
+/>
 ```
 
 ## API
@@ -113,6 +149,11 @@ function App() {
 | `className` | `string` | `''` | Container class name |
 | `style` | `CSSProperties` | `undefined` | Container inline styles |
 | `bufferMultiplier` | `number` | `1` | Viewport buffer (1 = 1 viewport above/below) |
+| `columnCount` | `number` | `undefined` | Override auto column count |
+| `onEndReached` | `() => void` | `undefined` | Callback when scrolled near end |
+| `onEndReachedThreshold` | `number` | `500` | Distance from end to trigger callback (px) |
+| `ssrPlaceholder` | `ReactNode` | `undefined` | Placeholder during SSR/loading |
+| `disableVirtualization` | `boolean` | `false` | Render all items (disables virtual scroll) |
 
 ### Helper Functions
 
@@ -138,13 +179,15 @@ const dimensions = await getImageSize('https://example.com/image.jpg');
    - `requestAnimationFrame` throttles scroll events
    - Debounced resize handler
    - CSS containment for layout isolation
+   - GPU-accelerated transforms with `translate3d`
 
 ## Performance Tips
 
 1. **Memoize `getItemSize`**: If dimensions don't change, cache them
-2. **Adjust `bufferMultiplier`**: Lower values render fewer items (faster) but may show blank space while scrolling
-3. **Use `loading="lazy"`**: For images, enable native lazy loading
-4. **Optimize images**: Use appropriately sized images
+2. **Use pre-computed dimensions**: Return `Promise.resolve()` for known sizes
+3. **Adjust `bufferMultiplier`**: Lower values render fewer items (faster) but may show blank space while scrolling
+4. **Use `loading="lazy"`**: For images, enable native lazy loading
+5. **Optimize images**: Use appropriately sized images
 
 ## Browser Support
 
