@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-02-12
+
+### Fixed
+- **Removed Tailwind CSS dependency**: Replaced className-based utility classes with inline styles. Users no longer need to add `.relative`, `.absolute`, and `.overflow-hidden` classes to their global CSS.
+
 ## [2.0.0] - 2026-01-18
 
 ### Added

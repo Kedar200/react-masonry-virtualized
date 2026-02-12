@@ -57,8 +57,9 @@ const MasonryItem = memo(
     pos: Position;
   }) => (
     <div
-      className="absolute overflow-hidden"
       style={{
+        position: "absolute",
+        overflow: "hidden",
         width: pos.width,
         height: pos.height,
         transform: `translate3d(${pos.x}px, ${pos.y}px, 0) scale(${pos.scale})`,
