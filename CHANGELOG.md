@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2026-02-13
+
+### Fixed
+- **Container offset bug**: Virtualization visibility checks now account for the grid container's position on the page. Previously, `calculateVisibleItems` compared container-relative item positions against window-level scroll, causing incorrect rendering when content exists above the grid.
+
 ## [2.0.1] - 2026-02-12
 
 ### Fixed

@@ -195,6 +195,10 @@ export function MasonryGrid<T>({
 
     const viewportHeight = window.innerHeight;
     const buffer = viewportHeight * bufferMultiplier;
+    const containerOffset = containerRef.current
+      ? containerRef.current.getBoundingClientRect().top + window.scrollY
+      : 0;
+    const relativeScrollTop = Math.max(0, scrollTop - containerOffset);
     const visible = new Set<number>();
 
     positions.forEach((pos, index) => {
@@ -203,8 +207,8 @@ export function MasonryGrid<T>({
       const itemBottom = pos.y + scaledHeight;
 
       if (
-        itemBottom >= scrollTop - buffer &&
-        itemTop <= scrollTop + viewportHeight + buffer
+        itemBottom >= relativeScrollTop - buffer &&
+        itemTop <= relativeScrollTop + viewportHeight + buffer
       ) {
         visible.add(index);
       }
@@ -214,7 +218,7 @@ export function MasonryGrid<T>({
 
     // Check if near end for infinite scroll
     if (onEndReached && !endReachedCalledRef.current) {
-      const scrollBottom = scrollTop + viewportHeight;
+      const scrollBottom = relativeScrollTop + viewportHeight;
       if (scrollBottom >= containerHeight - onEndReachedThreshold) {
         endReachedCalledRef.current = true;
         onEndReached();
