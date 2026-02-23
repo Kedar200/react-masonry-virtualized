@@ -37,6 +37,22 @@ export interface MasonryGridProps<T> {
   ssrPlaceholder?: ReactNode;
   /** Disable virtualization (render all items) */
   disableVirtualization?: boolean;
+  /**
+   * A single skeleton card element (e.g. `<SkeletonCard />`) that the library
+   * repeats and lays out in pixel-perfect masonry columns while item dimensions
+   * are being loaded. Uses the same column/width math as the real grid.
+   */
+  loadingPlaceholder?: ReactNode;
+  /**
+   * How many skeleton cards to render when `loadingPlaceholder` is set.
+   * Defaults to 12.
+   */
+  skeletonCount?: number;
+  /**
+   * Aspect ratio (height / width) used for skeleton cards so they fill
+   * plausible column heights before real data is available. Defaults to 1.3.
+   */
+  skeletonAspectRatio?: number;
 }
 
 interface Position {
@@ -47,7 +63,47 @@ interface Position {
   scale: number;
 }
 
-// Memoized item wrapper component
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/** Computes masonry positions for a fixed number of skeleton cards. */
+function buildSkeletonPositions(opts: {
+  containerWidth: number;
+  columnCount?: number;
+  minWidth: number;
+  gap: number;
+  baseWidth: number;
+  skeletonCount: number;
+  skeletonAspectRatio: number;
+}): { positions: Position[]; totalHeight: number } {
+  const { containerWidth, minWidth, gap, baseWidth, skeletonCount, skeletonAspectRatio } = opts;
+
+  const numCols = opts.columnCount ?? Math.max(2, Math.floor(containerWidth / (minWidth + gap)));
+  const totalGapWidth = gap * (numCols - 1);
+  const cardWidth = (containerWidth - totalGapWidth) / numCols;
+  const scale = cardWidth / baseWidth;
+  const cardHeight = baseWidth * skeletonAspectRatio; // in base-unit space
+  const scaledCardHeight = cardWidth * skeletonAspectRatio; // in pixel space
+
+  const columnHeights = new Array(numCols).fill(0);
+  const positions: Position[] = [];
+
+  for (let i = 0; i < skeletonCount; i++) {
+    const minColumnIndex = columnHeights.indexOf(Math.min(...columnHeights));
+    const x = minColumnIndex * (cardWidth + gap);
+    const y = columnHeights[minColumnIndex];
+
+    positions.push({ x, y, width: baseWidth, height: cardHeight, scale });
+    columnHeights[minColumnIndex] += scaledCardHeight + gap;
+  }
+
+  return { positions, totalHeight: Math.max(...columnHeights) };
+}
+
+// ---------------------------------------------------------------------------
+// Memoized item wrapper (shared by real items & skeleton items)
+// ---------------------------------------------------------------------------
 const MasonryItem = memo(
   ({
     children,
@@ -75,6 +131,86 @@ const MasonryItem = memo(
 
 MasonryItem.displayName = "MasonryItem";
 
+// ---------------------------------------------------------------------------
+// SkeletonGrid — renders loadingPlaceholder cards in real masonry layout
+// ---------------------------------------------------------------------------
+const SkeletonGrid = memo(
+  ({
+    loadingPlaceholder,
+    skeletonCount,
+    skeletonAspectRatio,
+    columnCount,
+    minWidth,
+    gap,
+    baseWidth,
+    className,
+    style,
+  }: {
+    loadingPlaceholder: ReactNode;
+    skeletonCount: number;
+    skeletonAspectRatio: number;
+    columnCount?: number;
+    minWidth: number;
+    gap: number;
+    baseWidth: number;
+    className: string;
+    style?: CSSProperties;
+  }) => {
+    const divRef = useRef<HTMLDivElement>(null);
+    const [layout, setLayout] = useState<{
+      positions: Position[];
+      totalHeight: number;
+    }>({ positions: [], totalHeight: 0 });
+
+    useEffect(() => {
+      const compute = () => {
+        const containerWidth =
+          divRef.current?.offsetWidth ?? window.innerWidth;
+        setLayout(
+          buildSkeletonPositions({
+            containerWidth,
+            columnCount,
+            minWidth,
+            gap,
+            baseWidth,
+            skeletonCount,
+            skeletonAspectRatio,
+          })
+        );
+      };
+
+      compute();
+
+      window.addEventListener("resize", compute);
+      return () => window.removeEventListener("resize", compute);
+    }, [columnCount, minWidth, gap, baseWidth, skeletonCount, skeletonAspectRatio]);
+
+    return (
+      <div
+        ref={divRef}
+        className={className}
+        style={{
+          position: "relative",
+          width: "100%",
+          height: layout.totalHeight,
+          ...style,
+        }}
+      >
+        {layout.positions.map((pos, i) => (
+          <MasonryItem key={i} pos={pos}>
+            {loadingPlaceholder}
+          </MasonryItem>
+        ))}
+      </div>
+    );
+  }
+);
+
+SkeletonGrid.displayName = "SkeletonGrid";
+
+// ---------------------------------------------------------------------------
+// MasonryGrid — main export
+// ---------------------------------------------------------------------------
 export function MasonryGrid<T>({
   items,
   renderItem,
@@ -90,6 +226,9 @@ export function MasonryGrid<T>({
   onEndReachedThreshold = 500,
   ssrPlaceholder,
   disableVirtualization = false,
+  loadingPlaceholder,
+  skeletonCount = 12,
+  skeletonAspectRatio = 1.3,
 }: MasonryGridProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | undefined>(undefined);
@@ -258,8 +397,25 @@ export function MasonryGrid<T>({
   }
 
   // Show loading state while dimensions are being fetched
-  if (isLoading && ssrPlaceholder) {
-    return <>{ssrPlaceholder}</>;
+  if (isLoading) {
+    if (loadingPlaceholder) {
+      return (
+        <SkeletonGrid
+          loadingPlaceholder={loadingPlaceholder}
+          skeletonCount={skeletonCount}
+          skeletonAspectRatio={skeletonAspectRatio}
+          columnCount={columnCount}
+          minWidth={minWidth}
+          gap={gap}
+          baseWidth={baseWidth}
+          className={className}
+          style={style}
+        />
+      );
+    }
+    if (ssrPlaceholder) {
+      return <>{ssrPlaceholder}</>;
+    }
   }
 
   return (

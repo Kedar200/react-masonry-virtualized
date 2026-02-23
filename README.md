@@ -13,6 +13,7 @@ A high-performance, virtualized masonry grid component for React with dynamic co
 - 📦 **Lightweight**: < 6KB minified
 - ♾️ **Infinite Scroll**: Built-in `onEndReached` callback
 - 🖥️ **SSR Ready**: Placeholder support for hydration
+- 🦴 **Skeleton Loading**: Pixel-perfect skeleton cards auto-sized to actual column widths
 
 ## Installation
 
@@ -124,6 +125,50 @@ If you already know item dimensions, return them immediately for better performa
 />
 ```
 
+### Loading Skeleton (Pixel-Perfect Alignment)
+
+Pass a single card template via `loadingPlaceholder` and the library renders it
+in the **exact same columns** as the real grid — you get perfectly-aligned
+skeletons without duplicating any layout logic yourself.
+
+```tsx
+function SkeletonCard() {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        borderRadius: 16,
+        background: 'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.4s infinite',
+      }}
+    />
+  );
+}
+
+function App() {
+  const [pins, setPins] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  return (
+    <MasonryGrid
+      items={pins}
+      renderItem={(pin) => <PinCard pin={pin} />}
+      getItemSize={(pin) => Promise.resolve({ width: pin.w, height: pin.h })}
+      // Library handles layout — skeletons match the real columns & widths
+      loadingPlaceholder={<SkeletonCard />}
+      skeletonCount={12}          // how many cards to show (default: 12)
+      skeletonAspectRatio={1.3}   // card height / width ratio (default: 1.3)
+    />
+  );
+}
+```
+
+> **Note**: `loadingPlaceholder` is active while `getItemSize` is resolving.
+> Once dimensions are loaded the real grid replaces it.
+> For SSR hydration use `ssrPlaceholder` as before.
+
 ### Fixed Column Count
 
 ```tsx
@@ -152,8 +197,11 @@ If you already know item dimensions, return them immediately for better performa
 | `columnCount` | `number` | `undefined` | Override auto column count |
 | `onEndReached` | `() => void` | `undefined` | Callback when scrolled near end |
 | `onEndReachedThreshold` | `number` | `500` | Distance from end to trigger callback (px) |
-| `ssrPlaceholder` | `ReactNode` | `undefined` | Placeholder during SSR/loading |
+| `ssrPlaceholder` | `ReactNode` | `undefined` | Placeholder during SSR/hydration (before JS runs) |
 | `disableVirtualization` | `boolean` | `false` | Render all items (disables virtual scroll) |
+| `loadingPlaceholder` | `ReactNode` | `undefined` | Single card template tiled in masonry columns while loading |
+| `skeletonCount` | `number` | `12` | Number of skeleton cards to render |
+| `skeletonAspectRatio` | `number` | `1.3` | Height/width ratio used for skeleton card sizing |
 
 ### Helper Functions
 
