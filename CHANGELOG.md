@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-03-18
+
+### Added
+- **Zoom-on-Hover**: New `enableZoomOnHover` prop — hold `Z` key and hover to zoom cards with 3D perspective tilt and dynamic shadows
+- **`zoomScale` prop**: Configure the zoom multiplier (default `1.08`)
+- **3D Perspective Tilt**: Cards tilt up to ±15° following the cursor with `perspective(800px)`
+- **Dynamic Box Shadows**: Shadow shifts opposite to tilt direction for realistic depth
+- **Fresh-press state machine**: Requires Z release + re-press for each zoom cycle — no accidental continuous zooming
+- **Instant reset**: Cards snap back immediately on release (no animation delay)
+
 ## [2.0.2] - 2026-02-13
 
 ### Fixed

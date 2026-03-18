@@ -1,6 +1,6 @@
 # react-masonry-virtualized
 
-A high-performance, virtualized masonry grid component for React with dynamic column layout and lazy loading.
+A high-performance, virtualized masonry grid component for React with dynamic column layout, lazy loading, and interactive 3D zoom effects.
 
 ## Features
 
@@ -10,10 +10,11 @@ A high-performance, virtualized masonry grid component for React with dynamic co
 - 💪 **TypeScript**: Full type safety and IntelliSense support
 - ⚡ **Optimized**: Uses RAF, memoization, and CSS containment
 - 🎯 **Zero Dependencies**: Only peer dependencies on React
-- 📦 **Lightweight**: < 6KB minified
+- 📦 **Lightweight**: < 7KB minified
 - ♾️ **Infinite Scroll**: Built-in `onEndReached` callback
 - 🖥️ **SSR Ready**: Placeholder support for hydration
 - 🦴 **Skeleton Loading**: Pixel-perfect skeleton cards auto-sized to actual column widths
+- 🔍 **Zoom-on-Hover**: Hold `Z` + hover for 3D perspective tilt with dynamic shadows
 
 ## Installation
 
@@ -169,6 +170,26 @@ function App() {
 > Once dimensions are loaded the real grid replaces it.
 > For SSR hydration use `ssrPlaceholder` as before.
 
+### Zoom-on-Hover (3D Tilt)
+
+Hold the `Z` key and hover over any card to zoom it with a 3D perspective tilt and dynamic shadow. Cards tilt toward your cursor with realistic depth.
+
+```tsx
+<MasonryGrid
+  items={images}
+  renderItem={(src) => <img src={src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+  getItemSize={async (src) => await getImageSize(src)}
+  enableZoomOnHover        // Enable the feature
+  zoomScale={1.1}          // 10% larger on zoom (default: 1.08)
+/>
+```
+
+**How it works:**
+1. Press and hold `Z` → hover a card → card scales up with smooth animation
+2. Move mouse → card tilts in 3D (±15°) with shadow shifting opposite to the tilt
+3. Release `Z` or leave the card → instantly snaps back (no animation)
+4. Must release and re-press `Z` for each zoom cycle — prevents accidental continuous zooming
+
 ### Fixed Column Count
 
 ```tsx
@@ -202,6 +223,8 @@ function App() {
 | `loadingPlaceholder` | `ReactNode` | `undefined` | Single card template tiled in masonry columns while loading |
 | `skeletonCount` | `number` | `12` | Number of skeleton cards to render |
 | `skeletonAspectRatio` | `number` | `1.3` | Height/width ratio used for skeleton card sizing |
+| `enableZoomOnHover` | `boolean` | `false` | Hold Z key + hover to zoom & 3D-tilt cards |
+| `zoomScale` | `number` | `1.08` | Scale multiplier when zoom is active (e.g. 1.1 = 10% larger) |
 
 ### Helper Functions
 

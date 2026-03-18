@@ -6,6 +6,7 @@ import {
   memo,
   ReactNode,
   CSSProperties,
+  MutableRefObject,
 } from "react";
 
 export interface MasonryGridProps<T> {
@@ -53,6 +54,16 @@ export interface MasonryGridProps<T> {
    * plausible column heights before real data is available. Defaults to 1.3.
    */
   skeletonAspectRatio?: number;
+  /**
+   * Enable zoom-on-hover: hold Z key and hover a card to scale it up.
+   * Requires a fresh Z press for each zoom cycle. Defaults to false.
+   */
+  enableZoomOnHover?: boolean;
+  /**
+   * Extra scale multiplier applied when zoom-on-hover is active.
+   * Defaults to 1.08 (8% larger).
+   */
+  zoomScale?: number;
 }
 
 interface Position {
@@ -102,6 +113,69 @@ function buildSkeletonPositions(opts: {
 }
 
 // ---------------------------------------------------------------------------
+// Zoom-on-hover keyboard state
+// ---------------------------------------------------------------------------
+interface ZoomState {
+  /** Whether the Z key is currently held AND was freshly pressed */
+  isActive: boolean;
+  /** Mark the current zoom cycle as consumed (requires release + re-press) */
+  consume: () => void;
+}
+
+/**
+ * Hook that lives in the MasonryGrid and manages global Z-key state.
+ * Returns a ref so MasonryItem can read it synchronously without re-renders.
+ */
+function useZoomKeyboard(enabled: boolean): MutableRefObject<ZoomState> {
+  const stateRef = useRef<ZoomState>({
+    isActive: false,
+    consume: () => {},
+  });
+
+  useEffect(() => {
+    if (!enabled) {
+      stateRef.current = {
+        isActive: false,
+        consume: () => {},
+      };
+      return;
+    }
+
+    let fresh = false; // true after keydown, false after keyup or consume
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "z" || e.key === "Z") {
+        if (!e.repeat) {
+          fresh = true;
+          stateRef.current.isActive = true;
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "z" || e.key === "Z") {
+        fresh = false;
+        stateRef.current.isActive = false;
+      }
+    };
+
+    stateRef.current.consume = () => {
+      fresh = false;
+      stateRef.current.isActive = false;
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [enabled]);
+
+  return stateRef;
+}
+
+// ---------------------------------------------------------------------------
 // Memoized item wrapper (shared by real items & skeleton items)
 // ---------------------------------------------------------------------------
 const MasonryItem = memo(
@@ -130,6 +204,145 @@ const MasonryItem = memo(
 );
 
 MasonryItem.displayName = "MasonryItem";
+
+// ---------------------------------------------------------------------------
+// Zoomable item wrapper — used when enableZoomOnHover is true
+// ---------------------------------------------------------------------------
+const ZoomableMasonryItem = memo(
+  ({
+    children,
+    pos,
+    zoomRef,
+    zoomScale,
+  }: {
+    children: ReactNode;
+    pos: Position;
+    zoomRef: MutableRefObject<ZoomState>;
+    zoomScale: number;
+  }) => {
+    const [zoomed, setZoomed] = useState(false);
+    const [tilt, setTilt] = useState({ rx: 0, ry: 0, mx: 0, my: 0 });
+    const divRef = useRef<HTMLDivElement>(null);
+    const isHoveredRef = useRef(false);
+
+    // Check zoom on key events while hovered
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.key === "z" || e.key === "Z") && !e.repeat && isHoveredRef.current) {
+          // Small delay to let useZoomKeyboard update first
+          requestAnimationFrame(() => {
+            if (zoomRef.current.isActive && isHoveredRef.current) {
+              setZoomed(true);
+            }
+          });
+        }
+      };
+
+      const handleKeyUp = (e: KeyboardEvent) => {
+        if (e.key === "z" || e.key === "Z") {
+          setZoomed(false);
+          setTilt({ rx: 0, ry: 0, mx: 0, my: 0 });
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keyup", handleKeyUp);
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("keyup", handleKeyUp);
+      };
+    }, [zoomRef]);
+
+    const handleMouseEnter = useCallback(() => {
+      isHoveredRef.current = true;
+      if (zoomRef.current.isActive) {
+        setZoomed(true);
+      }
+    }, [zoomRef]);
+
+    const handleMouseLeave = useCallback(() => {
+      isHoveredRef.current = false;
+      setTilt({ rx: 0, ry: 0, mx: 0, my: 0 });
+      if (zoomed) {
+        setZoomed(false);
+        zoomRef.current.consume();
+      }
+    }, [zoomed, zoomRef]);
+
+    const handleMouseMove = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!zoomed || !divRef.current) return;
+        const rect = divRef.current.getBoundingClientRect();
+        // normalised -1 to 1 from center
+        const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+        const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+        const maxAngle = 15; // degrees
+        setTilt({
+          ry: nx * maxAngle,   // tilt around Y axis (left-right)
+          rx: -ny * maxAngle,  // tilt around X axis (up-down, inverted)
+          mx: nx,              // normalised mouse x for shadow
+          my: ny,              // normalised mouse y for shadow
+        });
+      },
+      [zoomed]
+    );
+
+    const scaledWidth = pos.width * pos.scale;
+    const scaledHeight = pos.height * pos.scale;
+    const effectiveScale = zoomed ? pos.scale * zoomScale : pos.scale;
+    // Offset to zoom from center instead of top-left
+    const dx = zoomed ? (scaledWidth - scaledWidth * zoomScale) / 2 : 0;
+    const dy = zoomed ? (scaledHeight - scaledHeight * zoomScale) / 2 : 0;
+
+    // Dynamic shadow — shifts opposite to tilt direction
+    const shadowX = zoomed ? -tilt.mx * 20 : 0;
+    const shadowY = zoomed ? -tilt.my * 20 : 0;
+    const shadowBlur = zoomed ? 30 : 0;
+    const boxShadow = zoomed
+      ? `${shadowX}px ${shadowY}px ${shadowBlur}px rgba(0, 0, 0, 0.35)`
+      : "none";
+
+    return (
+      <div
+        ref={divRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onMouseMove={handleMouseMove}
+        style={{
+          position: "absolute",
+          width: pos.width,
+          height: pos.height,
+          transform: `translate3d(${pos.x + dx}px, ${pos.y + dy}px, 0) scale(${effectiveScale})`,
+          transformOrigin: "top left",
+          willChange: "transform",
+          transition: zoomed ? "transform 0.2s ease-out" : "none",
+          zIndex: zoomed ? 10 : undefined,
+        }}
+      >
+        {/* Inner div handles 3D tilt from center */}
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            overflow: zoomed ? "visible" : "hidden",
+            borderRadius: zoomed ? "8px" : undefined,
+            transform: zoomed
+              ? `perspective(800px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`
+              : "none",
+            transformOrigin: "center center",
+            transition: zoomed ? "transform 0.08s ease-out, box-shadow 0.08s ease-out" : "none",
+            boxShadow,
+            contain: zoomed ? undefined : "layout style paint",
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    );
+  }
+);
+
+ZoomableMasonryItem.displayName = "ZoomableMasonryItem";
 
 // ---------------------------------------------------------------------------
 // SkeletonGrid — renders loadingPlaceholder cards in real masonry layout
@@ -229,7 +442,10 @@ export function MasonryGrid<T>({
   loadingPlaceholder,
   skeletonCount = 12,
   skeletonAspectRatio = 1.3,
+  enableZoomOnHover = false,
+  zoomScale = 1.08,
 }: MasonryGridProps<T>) {
+  const zoomRef = useZoomKeyboard(enableZoomOnHover);
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | undefined>(undefined);
   const resizeTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -432,6 +648,14 @@ export function MasonryGrid<T>({
       {items.map((item, index) => {
         const pos = positions[index];
         if (!pos || !visibleIndices.has(index)) return null;
+
+        if (enableZoomOnHover) {
+          return (
+            <ZoomableMasonryItem key={index} pos={pos} zoomRef={zoomRef} zoomScale={zoomScale}>
+              {renderItem(item, index)}
+            </ZoomableMasonryItem>
+          );
+        }
 
         return (
           <MasonryItem key={index} pos={pos}>
