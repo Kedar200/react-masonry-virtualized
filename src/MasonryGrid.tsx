@@ -7,6 +7,8 @@ import {
   ReactNode,
   CSSProperties,
   MutableRefObject,
+  useImperativeHandle,
+  forwardRef,
 } from "react";
 
 export interface MasonryGridProps<T> {
@@ -424,27 +426,40 @@ SkeletonGrid.displayName = "SkeletonGrid";
 // ---------------------------------------------------------------------------
 // MasonryGrid — main export
 // ---------------------------------------------------------------------------
-export function MasonryGrid<T>({
-  items,
-  renderItem,
-  getItemSize,
-  baseWidth = 241,
-  minWidth = 223,
-  gap = 16,
-  className = "",
-  style,
-  bufferMultiplier = 1,
-  columnCount,
-  onEndReached,
-  onEndReachedThreshold = 500,
-  ssrPlaceholder,
-  disableVirtualization = false,
-  loadingPlaceholder,
-  skeletonCount = 12,
-  skeletonAspectRatio = 1.3,
-  enableZoomOnHover = false,
-  zoomScale = 1.08,
-}: MasonryGridProps<T>) {
+export interface MasonryGridRef {
+  /**
+   * Programmatically scrolls to a specific item index.
+   */
+  scrollToIndex: (
+    index: number,
+    options?: { behavior?: ScrollBehavior; offset?: number }
+  ) => void;
+}
+
+const MasonryGridInner = <T,>(
+  {
+    items,
+    renderItem,
+    getItemSize,
+    baseWidth = 241,
+    minWidth = 223,
+    gap = 16,
+    className = "",
+    style,
+    bufferMultiplier = 1,
+    columnCount,
+    onEndReached,
+    onEndReachedThreshold = 500,
+    ssrPlaceholder,
+    disableVirtualization = false,
+    loadingPlaceholder,
+    skeletonCount = 12,
+    skeletonAspectRatio = 1.3,
+    enableZoomOnHover = false,
+    zoomScale = 1.08,
+  }: MasonryGridProps<T>,
+  ref: React.ForwardedRef<MasonryGridRef>
+) => {
   const zoomRef = useZoomKeyboard(enableZoomOnHover);
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | undefined>(undefined);
@@ -607,6 +622,23 @@ export function MasonryGrid<T>({
     };
   }, []);
 
+  // Imperative handle for scrolling
+  useImperativeHandle(ref, () => ({
+    scrollToIndex: (index: number, options?: { behavior?: ScrollBehavior; offset?: number }) => {
+      if (!containerRef.current || positions.length === 0 || !positions[index]) return;
+
+      const pos = positions[index];
+      const containerTop = containerRef.current.getBoundingClientRect().top + window.scrollY;
+      const itemTop = containerTop + pos.y;
+      const offset = options?.offset ?? 0;
+
+      window.scrollTo({
+        top: Math.max(0, itemTop - offset),
+        behavior: options?.behavior ?? "auto",
+      });
+    }
+  }), [positions]);
+
   // Show SSR placeholder before hydration
   if (!isHydrated && ssrPlaceholder) {
     return <>{ssrPlaceholder}</>;
@@ -665,4 +697,8 @@ export function MasonryGrid<T>({
       })}
     </div>
   );
-}
+};
+
+export const MasonryGrid = forwardRef(MasonryGridInner) as <T>(
+  props: MasonryGridProps<T> & { ref?: React.Ref<MasonryGridRef> }
+) => React.ReactElement;

@@ -1,5 +1,5 @@
 export { MasonryGrid } from "./MasonryGrid";
-export type { MasonryGridProps } from "./MasonryGrid";
+export type { MasonryGridProps, MasonryGridRef } from "./MasonryGrid";
 
 // Helper function for loading image dimensions
 export async function getImageSize(src: string): Promise<{ width: number; height: number }> {

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-03-25
+
+### Added
+- **Programmatic Scrolling**: New `scrollToIndex` method accessible via `ref`.
+- **`MasonryGridRef` interface**: TypeScript support for the grid's imperative handle.
+- **Scroll Options**: Support for `behavior` (smooth/auto) and `offset` when scrolling to an item.
+
+
 ## [2.1.0] - 2026-03-18
 
 ### Added
