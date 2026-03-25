@@ -15,6 +15,7 @@ A high-performance, virtualized masonry grid component for React with dynamic co
 - 🖥️ **SSR Ready**: Placeholder support for hydration
 - 🦴 **Skeleton Loading**: Pixel-perfect skeleton cards auto-sized to actual column widths
 - 🔍 **Zoom-on-Hover**: Hold `Z` + hover for 3D perspective tilt with dynamic shadows
+- 🎯 **Programmatic Scroll**: Scroll to any item by index using `scrollToIndex` via `ref`
 
 ## Installation
 
@@ -190,6 +191,34 @@ Hold the `Z` key and hover over any card to zoom it with a 3D perspective tilt a
 3. Release `Z` or leave the card → instantly snaps back (no animation)
 4. Must release and re-press `Z` for each zoom cycle — prevents accidental continuous zooming
 
+### Programmatic Scrolling
+
+You can scroll to a specific item by index using the `scrollToIndex` method via a React `ref`.
+
+```tsx
+import { useRef } from 'react';
+import { MasonryGrid, MasonryGridRef } from 'react-masonry-virtualized';
+
+function App() {
+  const gridRef = useRef<MasonryGridRef>(null);
+
+  const handleScroll = () => {
+    // Scroll to item at index 50
+    gridRef.current?.scrollToIndex(50, { 
+      behavior: 'smooth', 
+      offset: 20 
+    });
+  };
+
+  return (
+    <>
+      <button onClick={handleScroll}>Scroll to 50</button>
+      <MasonryGrid ref={gridRef} items={items} ... />
+    </>
+  );
+}
+```
+
 ### Fixed Column Count
 
 ```tsx
@@ -225,6 +254,13 @@ Hold the `Z` key and hover over any card to zoom it with a 3D perspective tilt a
 | `skeletonAspectRatio` | `number` | `1.3` | Height/width ratio used for skeleton card sizing |
 | `enableZoomOnHover` | `boolean` | `false` | Hold Z key + hover to zoom & 3D-tilt cards |
 | `zoomScale` | `number` | `1.08` | Scale multiplier when zoom is active (e.g. 1.1 = 10% larger) |
+| `ref` | `Ref<MasonryGridRef>` | `undefined` | Ref to access imperative methods |
+
+### MasonryGridRef Methods
+
+| Method | Arguments | Description |
+|--------|-----------|-------------|
+| `scrollToIndex` | `(index: number, options?: { behavior: 'smooth' \| 'auto', offset: number })` | Scrolls the grid to the item at the specified index. |
 
 ### Helper Functions
 
