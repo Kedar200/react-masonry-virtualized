@@ -1,4 +1,5 @@
-import { MasonryGrid, getImageSize } from "react-masonry-virtualized";
+import { useRef } from "react";
+import { MasonryGrid, MasonryGridRef, getImageSize } from "react-masonry-virtualized";
 
 // Sample images from picsum.photos with varied aspect ratios
 const images = Array.from({ length: 30 }, (_, i) => {
@@ -15,6 +16,8 @@ const images = Array.from({ length: 30 }, (_, i) => {
 });
 
 export default function App() {
+  const gridRef = useRef<MasonryGridRef>(null);
+
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px" }}>
       <div
@@ -25,8 +28,12 @@ export default function App() {
           borderRadius: 12,
           color: "#e0e0e0",
           fontFamily: "system-ui, sans-serif",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
         }}
       >
+        <div>
         <h1
           style={{
             margin: 0,
@@ -48,9 +55,25 @@ export default function App() {
           }}>Z</kbd> key, then hover over any card to zoom it.
           Release Z or move away to reset. You must release &amp; re-press Z for each new zoom.
         </p>
+        </div>
+        <button
+          onClick={() => gridRef.current?.scrollToIndex(20, { behavior: 'smooth', offset: 50 })}
+          style={{
+            padding: "10px 20px",
+            background: "#4f46e5",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontWeight: 600
+          }}
+        >
+          Scroll to Item 20
+        </button>
       </div>
 
       <MasonryGrid
+        ref={gridRef}
         items={images}
         renderItem={(item) => (
           <img
