@@ -327,3 +327,4 @@ Contributions welcome! Please open an issue or PR.
 ## Credits
 
 Built with ❤️ using React, TypeScript, and tsup.
+<img width="835" height="507" alt="image" src="https://github.com/user-attachments/assets/f5b09383-bc33-4994-a074-75e1f8b03c53" />
