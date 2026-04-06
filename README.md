@@ -16,6 +16,7 @@ A high-performance, virtualized masonry grid component for React with dynamic co
 - 🦴 **Skeleton Loading**: Pixel-perfect skeleton cards auto-sized to actual column widths
 - 🔍 **Zoom-on-Hover**: Hold `Z` + hover for 3D perspective tilt with dynamic shadows
 - 🎯 **Programmatic Scroll**: Scroll to any item by index using `scrollToIndex` via `ref`
+- 🪟 **Custom Scroller**: Drop-in support for OverlayScrollbars, SimpleBar, Lenis, and any custom scroll container
 
 ## Installation
 
@@ -219,6 +220,76 @@ function App() {
 }
 ```
 
+### Custom Scroll Container (OverlayScrollbars, SimpleBar, Lenis, …)
+
+By default the grid listens for scroll events on `window`. Wrap the grid inside
+any custom scroller and pass its scrollable viewport element via `scrollContainer`
+to keep virtualization, infinite scroll, and `scrollToIndex` working correctly.
+
+#### With OverlayScrollbars
+
+```tsx
+import { useRef } from 'react';
+import { useOverlayScrollbars } from 'overlayscrollbars-react';
+import 'overlayscrollbars/overlayscrollbars.css';
+import { MasonryGrid } from 'react-masonry-virtualized';
+
+function App() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [initialize, getInstance] = useOverlayScrollbars({
+    options: { scrollbars: { autoHide: 'scroll' } },
+  });
+
+  // initialize OverlayScrollbars on the wrapper div
+  useEffect(() => {
+    if (containerRef.current) initialize(containerRef.current);
+  }, [initialize]);
+
+  // get the inner viewport element that actually scrolls
+  const viewport = getInstance()?.elements().viewport;
+
+  return (
+    <div ref={containerRef} style={{ height: '100vh' }}>
+      <MasonryGrid
+        items={items}
+        renderItem={(item) => <Card item={item} />}
+        getItemSize={(item) => Promise.resolve({ width: item.w, height: item.h })}
+        scrollContainer={viewport}
+      />
+    </div>
+  );
+}
+```
+
+#### With a plain scrollable div (or any other library)
+
+```tsx
+import { useRef } from 'react';
+import { MasonryGrid } from 'react-masonry-virtualized';
+
+function App() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={scrollRef}
+      style={{ height: '100vh', overflowY: 'auto' }}
+    >
+      <MasonryGrid
+        items={items}
+        renderItem={(item) => <Card item={item} />}
+        getItemSize={(item) => Promise.resolve({ width: item.w, height: item.h })}
+        scrollContainer={scrollRef}   // pass the ref directly
+      />
+    </div>
+  );
+}
+```
+
+> **Note**: The scroll container element must have `overflow: auto` or `overflow-y: scroll`
+> and a fixed height. The `MasonryGrid` itself should **not** have a fixed height when using
+> a custom container — let it grow naturally inside the scrollable parent.
+
 ### Fixed Column Count
 
 ```tsx
@@ -254,6 +325,7 @@ function App() {
 | `skeletonAspectRatio` | `number` | `1.3` | Height/width ratio used for skeleton card sizing |
 | `enableZoomOnHover` | `boolean` | `false` | Hold Z key + hover to zoom & 3D-tilt cards |
 | `zoomScale` | `number` | `1.08` | Scale multiplier when zoom is active (e.g. 1.1 = 10% larger) |
+| `scrollContainer` | `HTMLElement \| RefObject<HTMLElement> \| null` | `undefined` | Custom scroll container — pass an element or ref when using OverlayScrollbars, SimpleBar, Lenis, etc. |
 | `ref` | `Ref<MasonryGridRef>` | `undefined` | Ref to access imperative methods |
 
 ### MasonryGridRef Methods

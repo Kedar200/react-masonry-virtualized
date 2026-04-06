@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.2] - 2026-04-06
+
+### Fixed
+- **Custom scroll container — "only first row" rendering bug**: When passing a `scrollContainer` such as OverlayScrollbars' viewport, the grid's visibility window was calculated with `clientHeight = 0` on initial render (before the custom scroll element had been painted by the browser). This caused the effective buffer zone to collapse to zero, showing only items at `y = 0`. Fixed by:
+  1. Falling back to `window.innerHeight` when `scrollEl.clientHeight === 0`.
+  2. Attaching a `ResizeObserver` to the scroll container so visibility recalculates automatically once it receives a real height.
+- **Cross-realm `instanceof HTMLElement` check**: Changed the element-detection guard from `instanceof HTMLElement` to `nodeType === 1` duck-typing, fixing false-negatives inside StackBlitz / iframe sandboxes where the host window's `HTMLElement` differs from the element's own realm.
+
+## [2.3.1] - 2026-04-06
+
+### Fixed
+- **Cross-realm `instanceof HTMLElement` check**: Changed the element-detection guard from `instanceof HTMLElement` to `nodeType === 1` duck-typing, fixing false-negatives inside StackBlitz / iframe sandboxes where the host window's `HTMLElement` differs from the element's own realm.
+
+## [2.3.0] - 2026-04-06
+
+### Added
+- **Custom Scroll Container** (`scrollContainer` prop): Pass any `HTMLElement` or `React.RefObject<HTMLElement>` to make the grid listen for scroll events on that element instead of `window`. Enables seamless integration with OverlayScrollbars, SimpleBar, Lenis, and any other custom scroller.
+  - Virtualization, infinite scroll (`onEndReached`), and `scrollToIndex` all work correctly with the custom container.
+  - Accepts both a raw `HTMLElement` and a React ref for convenience.
+  - Fully backward-compatible — omitting the prop keeps existing `window` scroll behaviour.
+
 ## [2.2.0] - 2026-03-25
 
 ### Added

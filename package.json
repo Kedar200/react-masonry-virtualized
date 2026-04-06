@@ -1,6 +1,6 @@
 {
   "name": "react-masonry-virtualized",
-  "version": "2.2.0",
+  "version": "2.3.2",
   "description": "A high-performance, virtualized masonry grid component for React with dynamic column layout, infinite scroll, and async image loading",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

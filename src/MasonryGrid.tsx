@@ -66,6 +66,28 @@ export interface MasonryGridProps<T> {
    * Defaults to 1.08 (8% larger).
    */
   zoomScale?: number;
+  /**
+   * Custom scroll container element (or a React ref to one) to listen to
+   * instead of `window`. Use this when wrapping the grid inside a custom
+   * scroller such as OverlayScrollbars, SimpleBar, or Lenis.
+   *
+   * The element must have `overflow: auto | scroll` and its own height so
+   * that scroll events fire on it rather than on `window`.
+   *
+   * @example
+   * // With OverlayScrollbars
+   * const { osInstance } = useOverlayScrollbars(...);
+   * const viewport = osInstance()?.elements().viewport;
+   * <MasonryGrid scrollContainer={viewport} ... />
+   *
+   * @example
+   * // With a plain ref
+   * const scrollRef = useRef<HTMLDivElement>(null);
+   * <div ref={scrollRef} style={{ height: '100vh', overflowY: 'auto' }}>
+   *   <MasonryGrid scrollContainer={scrollRef} ... />
+   * </div>
+   */
+  scrollContainer?: HTMLElement | React.RefObject<HTMLElement> | null;
 }
 
 interface Position {
@@ -457,9 +479,22 @@ const MasonryGridInner = <T,>(
     skeletonAspectRatio = 1.3,
     enableZoomOnHover = false,
     zoomScale = 1.08,
+    scrollContainer,
   }: MasonryGridProps<T>,
   ref: React.ForwardedRef<MasonryGridRef>
 ) => {
+  /**
+   * Resolves the scrollContainer prop to an HTMLElement at call time.
+   * Returns null when the prop is not set (meaning: use window).
+   */
+  const getScrollEl = useCallback((): HTMLElement | null => {
+    if (!scrollContainer) return null;
+    if ('nodeType' in scrollContainer && scrollContainer.nodeType === 1) {
+      return scrollContainer as HTMLElement;
+    }
+    // React RefObject
+    return (scrollContainer as React.RefObject<HTMLElement>).current;
+  }, [scrollContainer]);
   const zoomRef = useZoomKeyboard(enableZoomOnHover);
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | undefined>(undefined);
@@ -475,6 +510,8 @@ const MasonryGridInner = <T,>(
   const [scrollTop, setScrollTop] = useState(0);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  // Tracks scroll container clientHeight so visibility recalculates when it changes (e.g. after OS paints)
+  const [scrollContainerHeight, setScrollContainerHeight] = useState(0);
 
   // Handle SSR hydration
   useEffect(() => {
@@ -563,12 +600,27 @@ const MasonryGridInner = <T,>(
       return;
     }
 
-    const viewportHeight = window.innerHeight;
+    const scrollEl = getScrollEl();
+    // clientHeight can be 0 if the scroll container hasn't painted yet — fall back to window.innerHeight
+    const viewportHeight = scrollEl
+      ? (scrollEl.clientHeight || window.innerHeight)
+      : window.innerHeight;
     const buffer = viewportHeight * bufferMultiplier;
-    const containerOffset = containerRef.current
-      ? containerRef.current.getBoundingClientRect().top + window.scrollY
-      : 0;
-    const relativeScrollTop = Math.max(0, scrollTop - containerOffset);
+
+    let relativeScrollTop: number;
+    if (scrollEl) {
+      // scrollTop relative to the scroll container's own top
+      const containerOffsetTop = containerRef.current
+        ? containerRef.current.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop
+        : 0;
+      relativeScrollTop = Math.max(0, scrollTop - containerOffsetTop);
+    } else {
+      const containerOffset = containerRef.current
+        ? containerRef.current.getBoundingClientRect().top + window.scrollY
+        : 0;
+      relativeScrollTop = Math.max(0, scrollTop - containerOffset);
+    }
+
     const visible = new Set<number>();
 
     positions.forEach((pos, index) => {
@@ -594,33 +646,53 @@ const MasonryGridInner = <T,>(
         onEndReached();
       }
     }
-  }, [positions, scrollTop, bufferMultiplier, disableVirtualization, onEndReached, containerHeight, onEndReachedThreshold]);
+  }, [positions, scrollTop, scrollContainerHeight, bufferMultiplier, disableVirtualization, onEndReached, containerHeight, onEndReachedThreshold, getScrollEl]);
 
   // Update visible items when scroll or positions change
   useEffect(() => {
     calculateVisibleItems();
   }, [calculateVisibleItems]);
 
-  // Throttled scroll handler with RAF
+  // Throttled scroll handler with RAF — attached to scrollContainer or window
   useEffect(() => {
+    const scrollEl = getScrollEl();
+    const target: EventTarget = scrollEl ?? window;
+
     const handleScroll = () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }
 
       rafRef.current = requestAnimationFrame(() => {
-        setScrollTop(window.scrollY);
+        setScrollTop(scrollEl ? scrollEl.scrollTop : window.scrollY);
       });
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    target.addEventListener("scroll", handleScroll, { passive: true } as AddEventListenerOptions);
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      target.removeEventListener("scroll", handleScroll);
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, []);
+  }, [getScrollEl]);
+
+  // ResizeObserver on the scroll container — updates scrollContainerHeight so
+  // calculateVisibleItems re-runs once the container has a real clientHeight
+  useEffect(() => {
+    const scrollEl = getScrollEl();
+    if (!scrollEl) return;
+
+    // Set initial height immediately in case it's already laid out
+    setScrollContainerHeight(scrollEl.clientHeight);
+
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height ?? scrollEl.clientHeight;
+      setScrollContainerHeight(h);
+    });
+    ro.observe(scrollEl);
+    return () => ro.disconnect();
+  }, [getScrollEl]);
 
   // Imperative handle for scrolling
   useImperativeHandle(ref, () => ({
@@ -628,16 +700,27 @@ const MasonryGridInner = <T,>(
       if (!containerRef.current || positions.length === 0 || !positions[index]) return;
 
       const pos = positions[index];
-      const containerTop = containerRef.current.getBoundingClientRect().top + window.scrollY;
-      const itemTop = containerTop + pos.y;
       const offset = options?.offset ?? 0;
+      const scrollEl = getScrollEl();
 
-      window.scrollTo({
-        top: Math.max(0, itemTop - offset),
-        behavior: options?.behavior ?? "auto",
-      });
+      if (scrollEl) {
+        const containerOffsetTop =
+          containerRef.current.getBoundingClientRect().top -
+          scrollEl.getBoundingClientRect().top +
+          scrollEl.scrollTop;
+        scrollEl.scrollTo({
+          top: Math.max(0, containerOffsetTop + pos.y - offset),
+          behavior: options?.behavior ?? "auto",
+        });
+      } else {
+        const containerTop = containerRef.current.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({
+          top: Math.max(0, containerTop + pos.y - offset),
+          behavior: options?.behavior ?? "auto",
+        });
+      }
     }
-  }), [positions]);
+  }), [positions, getScrollEl]);
 
   // Show SSR placeholder before hydration
   if (!isHydrated && ssrPlaceholder) {
