@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-04-06
+
+### Added
+- **Custom Scroll Container** (`scrollContainer` prop): Pass any `HTMLElement` or `React.RefObject<HTMLElement>` to make the grid listen for scroll events on that element instead of `window`. Enables seamless integration with OverlayScrollbars, SimpleBar, Lenis, and any other custom scroller.
+  - Virtualization, infinite scroll (`onEndReached`), and `scrollToIndex` all work correctly with the custom container.
+  - Accepts both a raw `HTMLElement` and a React ref for convenience.
+  - Fully backward-compatible — omitting the prop keeps existing `window` scroll behaviour.
+
 ## [2.2.0] - 2026-03-25
 
 ### Added
