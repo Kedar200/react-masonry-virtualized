@@ -489,7 +489,9 @@ const MasonryGridInner = <T,>(
    */
   const getScrollEl = useCallback((): HTMLElement | null => {
     if (!scrollContainer) return null;
-    if (scrollContainer instanceof HTMLElement) return scrollContainer;
+    if ('nodeType' in scrollContainer && scrollContainer.nodeType === 1) {
+      return scrollContainer as HTMLElement;
+    }
     // React RefObject
     return (scrollContainer as React.RefObject<HTMLElement>).current;
   }, [scrollContainer]);
@@ -508,6 +510,8 @@ const MasonryGridInner = <T,>(
   const [scrollTop, setScrollTop] = useState(0);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  // Tracks scroll container clientHeight so visibility recalculates when it changes (e.g. after OS paints)
+  const [scrollContainerHeight, setScrollContainerHeight] = useState(0);
 
   // Handle SSR hydration
   useEffect(() => {
@@ -597,7 +601,10 @@ const MasonryGridInner = <T,>(
     }
 
     const scrollEl = getScrollEl();
-    const viewportHeight = scrollEl ? scrollEl.clientHeight : window.innerHeight;
+    // clientHeight can be 0 if the scroll container hasn't painted yet — fall back to window.innerHeight
+    const viewportHeight = scrollEl
+      ? (scrollEl.clientHeight || window.innerHeight)
+      : window.innerHeight;
     const buffer = viewportHeight * bufferMultiplier;
 
     let relativeScrollTop: number;
@@ -639,7 +646,7 @@ const MasonryGridInner = <T,>(
         onEndReached();
       }
     }
-  }, [positions, scrollTop, bufferMultiplier, disableVirtualization, onEndReached, containerHeight, onEndReachedThreshold, getScrollEl]);
+  }, [positions, scrollTop, scrollContainerHeight, bufferMultiplier, disableVirtualization, onEndReached, containerHeight, onEndReachedThreshold, getScrollEl]);
 
   // Update visible items when scroll or positions change
   useEffect(() => {
@@ -668,6 +675,23 @@ const MasonryGridInner = <T,>(
         cancelAnimationFrame(rafRef.current);
       }
     };
+  }, [getScrollEl]);
+
+  // ResizeObserver on the scroll container — updates scrollContainerHeight so
+  // calculateVisibleItems re-runs once the container has a real clientHeight
+  useEffect(() => {
+    const scrollEl = getScrollEl();
+    if (!scrollEl) return;
+
+    // Set initial height immediately in case it's already laid out
+    setScrollContainerHeight(scrollEl.clientHeight);
+
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height ?? scrollEl.clientHeight;
+      setScrollContainerHeight(h);
+    });
+    ro.observe(scrollEl);
+    return () => ro.disconnect();
   }, [getScrollEl]);
 
   // Imperative handle for scrolling
